@@ -26,12 +26,18 @@ module GithubTrello
       if branch == 'master'
         payload["commits"].each do |commit|
           # Figure out the card short id
-          match = commit["message"].match(/((start|per|finish|fix)e?s? \D?([0-9]+))/i)
-          next unless match and match[3].to_i > 0
+          match = commit["message"].match(/(((start|per|finish|fix)e?s? |#)\D?([0-9]+))/i)
+          next unless match
 
-          results = http.get_card(board_id, match[3].to_i)
+          commit_action = match[3]
+          commit_action = "per" unless commit_action
+          card_number = match[4].to_i
+
+          next unless card_number > 0
+
+          results = http.get_card(board_id, card_number)
           unless results
-            puts "[ERROR] Cannot find card matching ID #{match[3]}"
+            puts "[ERROR] Cannot find card matching ID #{card_number}"
             next
           end
 
@@ -39,13 +45,12 @@ module GithubTrello
 
           # Add the commit comment
           message = "#{commit["author"]["name"]}: #{commit["message"]}\n\n[#{branch}] #{commit["url"]}"
-          message.gsub!(match[1], "")
           message.gsub!(/\(\)$/, "")
 
           http.add_comment(results["id"], message)
 
           #Determine the action to take
-          new_list_id = case match[2].downcase
+          new_list_id = case commit_action.downcase
            when "start", "per" then start_list_target_id
            when "finish", "fix" then finish_list_target_id
           end
